@@ -1,0 +1,15 @@
+/* High-contrast keyboard-friendly stylesheet */
+QWidget { font-family: "Segoe UI", "Helvetica Neue", sans-serif; font-size: 10pt; }
+QMainWindow { background: #f5f6f8; }
+QTabWidget::pane { border: 1px solid #c2c8d0; background: white; }
+QTabBar::tab { padding: 6px 14px; }
+QTabBar::tab:selected { background: white; border-bottom: 2px solid #2b6cb0; }
+QPushButton { padding: 5px 12px; }
+QPushButton:focus, QLineEdit:focus, QComboBox:focus, QTableView:focus {
+    outline: none;
+    border: 2px solid #2b6cb0;
+}
+QStatusBar { background: #ebeef2; }
+QHeaderView::section { background: #e6ebf0; padding: 4px; border: none; }
+QTableView { gridline-color: #d9dee4; selection-background-color: #2b6cb0; selection-color: white; }
+.warning { color: #b34700; }

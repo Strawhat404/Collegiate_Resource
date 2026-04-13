@@ -1,0 +1,1 @@
+"""Detachable windows."""

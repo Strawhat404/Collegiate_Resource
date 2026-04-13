@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  WiX 3.x source for the CRHGC Windows Installer (.msi).
+
+  Build steps (Windows host with WiX Toolset v3.11+ and PyInstaller installed).
+  Run all commands from the `repo/` directory; paths below are resolved
+  relative to the candle.exe working directory (i.e., `repo/`):
+
+      pyinstaller --noconfirm --windowed --name CRHGC main.py
+      candle -arch x64 installer\CRHGC.wxs -o installer\CRHGC.wixobj
+      light  -ext WixUIExtension installer\CRHGC.wixobj -o installer\CRHGC.msi
+
+  The bundle installs into "C:\Program Files\CRHGC", registers a Start Menu
+  shortcut, sets a launcher GUID for AppUserModelID (so the running app
+  groups under its own taskbar icon), and creates a minimal Add/Remove
+  Programs entry. Per-user data lives in %LOCALAPPDATA%\CRHGC at first run.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Product Id="*"
+           Name="Collegiate Resource &amp; Housing Governance Console"
+           Language="1033"
+           Version="1.0.0.0"
+           Manufacturer="CRHGC"
+           UpgradeCode="6E3F4D9B-3C0E-4B5C-9B0A-7F2E2A5D4F11">
+
+    <Package InstallerVersion="500"
+             Compressed="yes"
+             InstallScope="perMachine"
+             Manufacturer="CRHGC"
+             Description="Collegiate Resource &amp; Housing Governance Console" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of CRHGC is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLDIR" />
+    <Property Id="ARPPRODUCTICON" Value="CrhgcIcon.ico" />
+    <Property Id="MSIINSTALLPERUSER" Value="0" />
+
+    <Icon Id="CrhgcIcon.ico" SourceFile="installer\\app.ico" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="CRHGC">
+          <Component Id="MainExecutable" Guid="A1B2C3D4-E5F6-4789-9ABC-DEF012345678">
+            <File Id="CRHGC_EXE"
+                  Source="dist\\CRHGC\\CRHGC.exe"
+                  KeyPath="yes">
+              <Shortcut Id="StartMenuShortcut"
+                        Directory="ProgramMenuDir"
+                        Name="CRHGC"
+                        WorkingDirectory="INSTALLDIR"
+                        Icon="CrhgcIcon.ico"
+                        Advertise="yes" />
+            </File>
+          </Component>
+          <!-- Bundled assets: stylesheet, migrations, seeds.
+
+               NOTE: ``installer\update_pubkey.pem`` is intentionally NOT
+               bundled by default. The repo ships only
+               ``update_pubkey.pem.example`` (a documentation stub) so an
+               operator must generate and drop in a real production key
+               before producing a release MSI. The build script
+               ``build_msi.ps1`` fails fast if the real PEM is missing,
+               which keeps placeholders out of shipped installers. -->
+          <Component Id="AppAssets" Guid="A1B2C3D4-E5F6-4789-9ABC-DEF012345679">
+            <File Source="frontend\\style.qss"  KeyPath="yes" />
+            <File Source="database\\migrations\\0001_initial.sql" />
+            <File Source="database\\migrations\\0002_fts.sql" />
+            <File Source="database\\migrations\\0003_catalog_compliance_bom.sql" />
+            <File Source="database\\migrations\\0004_permissions_extra.sql" />
+            <File Source="database\\migrations\\0005_governance_fixes.sql" />
+            <File Source="database\\migrations\\0006_notif_enqueue_failures.sql" />
+            <File Source="database\\migrations\\0007_notif_enqueue_attempts.sql" />
+            <File Source="database\\seed\\seed_dev.sql" />
+            <File Source="database\\seed\\seed_extras.sql" />
+          </Component>
+          <!-- Optional component: included only when an operator-supplied
+               production public key has been placed at
+               ``installer\update_pubkey.pem``. The build script gates
+               this component via the WiX preprocessor variable
+               ``HasUpdatePubKey`` (defined when the file exists). -->
+          <?ifdef HasUpdatePubKey ?>
+          <Component Id="UpdatePubKey" Guid="A1B2C3D4-E5F6-4789-9ABC-DEF01234567B">
+            <File Source="installer\\update_pubkey.pem" KeyPath="yes" />
+          </Component>
+          <?endif ?>
+        </Directory>
+      </Directory>
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ProgramMenuDir" Name="CRHGC">
+          <Component Id="ProgramMenuDir" Guid="A1B2C3D4-E5F6-4789-9ABC-DEF01234567A">
+            <RemoveFolder Id="ProgramMenuDir" On="uninstall" />
+            <RegistryValue Root="HKCU"
+                           Key="Software\\CRHGC"
+                           Type="string"
+                           Value=""
+                           KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <Feature Id="ProductFeature" Title="CRHGC" Level="1">
+      <ComponentRef Id="MainExecutable" />
+      <ComponentRef Id="AppAssets" />
+      <?ifdef HasUpdatePubKey ?>
+      <ComponentRef Id="UpdatePubKey" />
+      <?endif ?>
+      <ComponentRef Id="ProgramMenuDir" />
+    </Feature>
+
+    <UI>
+      <UIRef Id="WixUI_InstallDir" />
+    </UI>
+  </Product>
+</Wix>
