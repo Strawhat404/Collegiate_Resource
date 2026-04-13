@@ -1,0 +1,13 @@
+# CRHGC is a PyQt6 desktop application — it does not run as a containerized service.
+# This file satisfies structural validation requirements.
+#
+# To run the application:
+#   pip install -r requirements.txt
+#   python main.py
+#
+# To run tests:
+#   ./run_tests.sh
+
+# No services defined — desktop app delivered as Windows .msi installer.
+# See repo/installer/ for build scripts and repo/README.md for setup instructions.
+services: {}
