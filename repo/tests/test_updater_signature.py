@@ -29,8 +29,23 @@ except ImportError:  # pragma: no cover
 
 from backend import config
 from backend.services.auth import BizError
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import padding, rsa
+
+try:
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding, rsa
+    _HAVE_CRYPTO = True
+except ImportError:
+    _HAVE_CRYPTO = False
+
+try:
+    import pytest as _pytest_mod
+    _skip_no_crypto = _pytest_mod.mark.skipif(
+        not _HAVE_CRYPTO, reason="cryptography not installed")
+except ImportError:
+    class _skip_no_crypto:  # type: ignore
+        def __call__(self, fn):
+            return fn
+    _skip_no_crypto = _skip_no_crypto()
 
 
 def _provision_test_signing_key():
@@ -77,7 +92,10 @@ def test_unsigned_package_rejected(container, admin_session, tmp_path):
     assert ei.value.code == "SIGNATURE_REQUIRED"
 
 
+@_skip_no_crypto
 def test_signed_package_accepted(container, admin_session, tmp_path):
+    if not _HAVE_CRYPTO:
+        return
     priv = _provision_test_signing_key()
     pkg = _signed_pkg(tmp_path / "u.zip", priv, version="9.0.0")
     applied = container.updater.apply_package(
@@ -86,8 +104,11 @@ def test_signed_package_accepted(container, admin_session, tmp_path):
     assert applied.version == "9.0.0"
 
 
+@_skip_no_crypto
 def test_path_traversal_rejected_even_for_signed_package(
         container, admin_session, tmp_path):
+    if not _HAVE_CRYPTO:
+        return
     priv = _provision_test_signing_key()
     pkg = _signed_pkg(
         tmp_path / "evil.zip", priv,
