@@ -2,23 +2,12 @@
 # ============================================================
 # CRHGC — Unified Test Runner
 # Usage: ./run_tests.sh
-# If running outside Docker, delegates to Docker automatically.
 # ============================================================
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
-
-# If not inside a container, run via Docker to ensure all deps are available
-if [ ! -f /.dockerenv ]; then
-    echo "Not running inside Docker — delegating to Docker container..."
-    docker compose run --rm \
-        -e DISPLAY="" \
-        -e QT_QPA_PLATFORM=offscreen \
-        app bash run_tests.sh
-    exit $?
-fi
 
 PYTHON="${PYTHON:-python3}"
 PASS=0

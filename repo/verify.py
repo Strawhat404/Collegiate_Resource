@@ -260,6 +260,11 @@ def main() -> int:
 
     # 16. Updater: build a tiny SIGNED package, apply, then rollback
     def t16():
+        try:
+            from cryptography.hazmat.primitives import hashes, serialization  # noqa: F401
+        except ImportError:
+            print("  SKIP  updater apply + rollback (cryptography not installed)")
+            return
         import tempfile, zipfile, json
         from cryptography.hazmat.primitives import hashes, serialization
         from cryptography.hazmat.primitives.asymmetric import padding, rsa

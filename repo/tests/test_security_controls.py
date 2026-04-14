@@ -282,6 +282,14 @@ def test_updater_refuses_placeholder_public_key(
     """A PEM containing the placeholder/example markers must be rejected
     by the verifier (signed_by reports ``placeholder-pubkey``).
     """
+    try:
+        import cryptography  # noqa: F401
+    except ImportError:
+        try:
+            import pytest as _pt
+            _pt.skip("cryptography not installed")
+        except ImportError:
+            return
     import json as _json
     import zipfile as _zip
     from backend import config as _config
@@ -315,6 +323,14 @@ def test_corrupt_at_rest_blob_does_not_crash_startup(container, admin_session):
     from backend import db as _db, config as _config
     if getattr(_db, "HAVE_SQLCIPHER", False):
         return
+    try:
+        import cryptography  # noqa: F401
+    except ImportError:
+        try:
+            import pytest as _pt
+            _pt.skip("cryptography not installed")
+        except ImportError:
+            return
 
     # Force a known-good blob to exist so we can corrupt it.
     container.compliance.submit_employer(

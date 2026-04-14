@@ -130,6 +130,14 @@ def test_resource_publish_workflow(container, admin_session):
 
 def test_signed_update_apply_and_rollback(container, admin_session, tmp_path):
     """Build a real RSA-PSS signed package, apply it, then roll back."""
+    try:
+        from cryptography.hazmat.primitives import hashes, serialization  # noqa: F401
+    except ImportError:
+        try:
+            import pytest as _pt
+            _pt.skip("cryptography not installed")
+        except ImportError:
+            return
     from backend import config as _config
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import padding, rsa
