@@ -68,19 +68,20 @@ if [ -f /app/main.py ]; then
 fi
 
 # -----------------------------------------------------------
-# Outside the app container — delegate via docker compose exec
-# (the app container must already be running, as the validator
-# starts it with `docker compose up` before calling this script)
+# Outside the app container — spin up a fresh container via
+# docker compose run so all deps are available regardless of
+# whether the app container is currently running or not.
 # -----------------------------------------------------------
-CONTAINER_NAME="crhgc-app"
+echo "Delegating test execution into Docker container..."
 
-echo "Delegating test execution into container: $CONTAINER_NAME"
-
-# Ensure Xvfb is available for headless Qt inside the container
-docker exec "$CONTAINER_NAME" bash -c "
-    rm -f /tmp/.X99-lock
-    Xvfb :99 -screen 0 1280x720x24 -nolisten tcp &
-    sleep 1
-    DISPLAY=:99 QT_QPA_PLATFORM=offscreen bash /app/run_tests.sh
-"
+docker compose run --rm \
+    -e DISPLAY=:99 \
+    -e QT_QPA_PLATFORM=offscreen \
+    --entrypoint bash \
+    app -c "
+        rm -f /tmp/.X99-lock &&
+        Xvfb :99 -screen 0 1280x720x24 -nolisten tcp &
+        sleep 1 &&
+        DISPLAY=:99 QT_QPA_PLATFORM=offscreen bash /app/run_tests.sh
+    "
 exit $?
