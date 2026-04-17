@@ -3,12 +3,9 @@
 # CRHGC — Unified Test Runner
 # Usage: ./run_tests.sh
 #
-# When run outside a container, delegates to Docker where all
-# runtime dependencies (Python, pytest, cryptography, PyQt6,
-# Xvfb) are pre-installed — no local pip install required.
-#
-# Inside the container, pytest is guaranteed available because
-# requirements.txt is installed during the Docker build.
+# Always delegates test execution into the Docker container
+# where all runtime dependencies (Python, pytest, cryptography,
+# PyQt6, Xvfb) are pre-installed via requirements.txt.
 # ============================================================
 
 set -euo pipefail
@@ -17,65 +14,73 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
 # -----------------------------------------------------------
-# Outside container → delegate to Docker (self-contained)
+# If we are already running INSIDE our app container
+# (detected by the presence of /app/main.py which is only
+# copied during the Docker build), run the suite directly.
 # -----------------------------------------------------------
-if [ ! -f /.dockerenv ]; then
-    echo "Not inside a container — delegating to Docker..."
-    docker compose --profile test run --rm \
-        -e DISPLAY=:99 \
-        -e QT_QPA_PLATFORM=offscreen \
-        test
-    exit $?
+if [ -f /app/main.py ]; then
+    PYTHON="python3"
+    PASS=0
+    FAIL=0
+
+    echo "=========================================="
+    echo "  CRHGC Test Suite  (container runtime)"
+    echo "=========================================="
+    echo ""
+
+    # ---- Headless verification (service flows) ----
+    echo "=== Headless Verification (verify.py) ==="
+    if "$PYTHON" /app/verify.py; then
+        PASS=$((PASS + 1))
+        echo "PASS: verify.py"
+    else
+        FAIL=$((FAIL + 1))
+        echo "FAIL: verify.py"
+    fi
+    echo ""
+
+    # ---- pytest suite ----
+    echo "=== Unit / API / E2E Tests (pytest) ==="
+    if "$PYTHON" -m pytest /app -q --tb=short; then
+        PASS=$((PASS + 1))
+        echo "PASS: pytest"
+    else
+        FAIL=$((FAIL + 1))
+        echo "FAIL: pytest"
+    fi
+    echo ""
+
+    # ---- Summary ----
+    echo "=========================================="
+    echo "  Test Summary"
+    echo "=========================================="
+    echo "Suites passed: $PASS"
+    echo "Suites failed: $FAIL"
+    echo "=========================================="
+
+    if [ "$FAIL" -gt 0 ]; then
+        echo "RESULT: SOME TESTS FAILED"
+        exit 1
+    else
+        echo "RESULT: ALL TESTS PASSED"
+        exit 0
+    fi
 fi
 
 # -----------------------------------------------------------
-# Inside container — all deps are available via Docker image
+# Outside the app container — delegate via docker compose exec
+# (the app container must already be running, as the validator
+# starts it with `docker compose up` before calling this script)
 # -----------------------------------------------------------
-PYTHON="${PYTHON:-python3}"
-PASS=0
-FAIL=0
+CONTAINER_NAME="crhgc-app"
 
-echo "=========================================="
-echo "  CRHGC Test Suite  (container runtime)"
-echo "=========================================="
-echo ""
+echo "Delegating test execution into container: $CONTAINER_NAME"
 
-# ---- Headless verification (service flows) ----
-echo "=== Headless Verification (verify.py) ==="
-if "$PYTHON" verify.py; then
-    PASS=$((PASS + 1))
-    echo "  PASS: verify.py"
-else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: verify.py"
-fi
-echo ""
-
-# ---- pytest suite ----
-# pytest is always installed inside the container image
-# (listed in requirements.txt, installed at build time).
-echo "=== Unit / API / E2E Tests (pytest) ==="
-if "$PYTHON" -m pytest -q --tb=short; then
-    PASS=$((PASS + 1))
-    echo "  PASS: pytest"
-else
-    FAIL=$((FAIL + 1))
-    echo "  FAIL: pytest"
-fi
-echo ""
-
-# ---- Summary ----
-echo "=========================================="
-echo "  Test Summary"
-echo "=========================================="
-echo "  Suites passed: $PASS"
-echo "  Suites failed: $FAIL"
-echo "=========================================="
-
-if [ "$FAIL" -gt 0 ]; then
-    echo "RESULT: SOME TESTS FAILED"
-    exit 1
-else
-    echo "RESULT: ALL TESTS PASSED"
-    exit 0
-fi
+# Ensure Xvfb is available for headless Qt inside the container
+docker exec "$CONTAINER_NAME" bash -c "
+    rm -f /tmp/.X99-lock
+    Xvfb :99 -screen 0 1280x720x24 -nolisten tcp &
+    sleep 1
+    DISPLAY=:99 QT_QPA_PLATFORM=offscreen bash /app/run_tests.sh
+"
+exit $?
