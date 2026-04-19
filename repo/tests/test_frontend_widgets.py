@@ -38,23 +38,32 @@ def _skip_no_qt():
         pytest.skip(_qt_skip_reason)
 
 
-def _make_main_window(container, session):
-    """Create a MainWindow that won't block in offscreen/headless mode.
+@pytest.fixture(autouse=True)
+def _patch_qt_dialogs(monkeypatch):
+    """Globally patch all blocking QMessageBox static methods so no test
+    in this module can hang waiting for a modal dialog in offscreen mode."""
+    if _qt_skip_reason:
+        yield
+        return
+    from PyQt6.QtWidgets import QMessageBox
+    noop = lambda *a, **kw: QMessageBox.StandardButton.No
+    for method in ("question", "information", "warning", "critical", "about"):
+        monkeypatch.setattr(QMessageBox, method, noop)
+    yield
 
-    MainWindow.__init__ calls _offer_draft_recovery() which opens a
-    QMessageBox.question if drafts exist — that blocks forever without
-    a display server event loop. We discard all drafts first, and stop
-    the QTimers immediately after construction so they don't fire during
-    teardown.
+
+def _make_main_window(container, session):
+    """Create a MainWindow safe for offscreen/headless mode.
+
+    The autouse _patch_qt_dialogs fixture ensures QMessageBox never
+    blocks. We just discard drafts and stop timers after construction.
     """
     from frontend.main_window import MainWindow
-    # Prevent _offer_draft_recovery from opening a blocking dialog
     try:
         container.checkpoints.discard_all(session)
     except Exception:
         pass
     win = MainWindow(container, session)
-    # Stop background timers immediately so tests are deterministic
     try:
         win._dispatch_timer.stop()
     except Exception:
@@ -689,7 +698,6 @@ class TestMainEntryPoint:
 class TestLoginDialogBehavior:
 
     def test_accept_with_valid_credentials(self, container, admin_session):
-        """Programmatically fill and accept LoginDialog."""
         _skip_no_qt()
         from frontend.dialogs import LoginDialog
         dlg = LoginDialog(container)
@@ -701,7 +709,6 @@ class TestLoginDialogBehavior:
 
     def test_accept_with_wrong_password_keeps_dialog_open(self, container,
                                                           admin_session):
-        """Wrong password must not set session and must not close dialog."""
         _skip_no_qt()
         from frontend.dialogs import LoginDialog
         dlg = LoginDialog(container)
@@ -732,21 +739,17 @@ class TestLoginDialogBehavior:
 class TestBootstrapDialogBehavior:
 
     def test_accept_password_mismatch(self, container, admin_session):
-        """Mismatched password + confirm must not create user."""
         _skip_no_qt()
         from frontend.dialogs import BootstrapDialog
-        # Need a fresh container without any users for bootstrap to work,
-        # but we can still test the mismatch guard in isolation.
         dlg = BootstrapDialog(container)
         dlg.full_name.setText("Admin")
         dlg.username.setText("newadmin")
         dlg.password.setText("LongPassword1!")
         dlg.confirm.setText("DifferentPassword2!")
         dlg._accept()
-        assert dlg.user is None  # mismatch prevented creation
+        assert dlg.user is None
 
     def test_accept_weak_password(self, container, admin_session):
-        """Passwords < 10 chars must be rejected at the service level."""
         _skip_no_qt()
         from frontend.dialogs import BootstrapDialog
         dlg = BootstrapDialog(container)
@@ -755,7 +758,6 @@ class TestBootstrapDialogBehavior:
         dlg.password.setText("short")
         dlg.confirm.setText("short")
         dlg._accept()
-        # Service raises WEAK_PASSWORD or BOOTSTRAP_NOT_ALLOWED (admin exists)
         assert dlg.user is None
 
 

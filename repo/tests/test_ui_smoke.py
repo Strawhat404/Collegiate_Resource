@@ -89,22 +89,24 @@ def _qtbot_fixture(request=None):
     return _QtBotShim()
 
 
-def test_main_window_smoke(container, admin_session):
+def test_main_window_smoke(container, admin_session, monkeypatch, qtbot):
     """Boot MainWindow, walk every tab, fire Ctrl+K — no exceptions."""
     if _skip_if_no_gui():
         return
-    qtbot = _qtbot_fixture()
     from frontend.main_window import MainWindow
+    from PyQt6.QtWidgets import QMessageBox
 
-    # Discard any drafts to prevent _offer_draft_recovery from opening
-    # a blocking QMessageBox.question dialog in headless mode.
+    # Patch all blocking QMessageBox methods globally so nothing hangs.
+    noop = lambda *a, **kw: QMessageBox.StandardButton.No
+    for method in ("question", "information", "warning", "critical", "about"):
+        monkeypatch.setattr(QMessageBox, method, noop)
+
     try:
         container.checkpoints.discard_all(admin_session)
     except Exception:
         pass
 
     win = MainWindow(container, admin_session)
-    # Stop timers immediately so they don't fire during the test.
     try:
         win._dispatch_timer.stop()
         win._checkpoint_timer.stop()
@@ -113,17 +115,14 @@ def test_main_window_smoke(container, admin_session):
     qtbot.addWidget(win)
     qtbot.waitExposed(win, timeout=2000)
 
-    # Walk the tabs so each constructor + initial render runs at least once.
     tabs = win.tabs
     for i in range(tabs.count()):
         tabs.setCurrentIndex(i)
 
-    # Trigger the universal-search palette (Ctrl+K) and confirm it surfaces.
     from PyQt6.QtCore import Qt as _Qt
     qtbot.keyClick(win, _Qt.Key.Key_K,
                    modifier=_Qt.KeyboardModifier.ControlModifier)
 
-    # Tear down explicitly so the test doesn't leak Qt timers between runs.
     win._force_quit = True
     win.close()
 
